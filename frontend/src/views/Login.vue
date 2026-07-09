@@ -33,7 +33,7 @@ const username = ref('guest')
 const password = ref('123')
 const error = ref('')
 const loading = ref(false)
-const logoUrl = '/demo/ecms/ziwilogo.png'
+const logoUrl = '/ziwilogo.png'
 
 async function login() {
   if (!username.value || !password.value) { error.value = '请输入用户名和密码'; return }
