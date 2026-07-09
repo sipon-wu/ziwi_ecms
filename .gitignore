@@ -1,0 +1,47 @@
+# ===== 依赖 =====
+frontend/node_modules/
+**/node_modules/
+
+# ===== 构建产物 =====
+frontend/dist/
+dist/
+
+# ===== 数据库（含演示数据，不入库；可经 seed 脚本重建）=====
+backend/energy_data.db
+*.db
+*.sqlite
+*.sqlite3
+
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# ===== 密钥 / 环境变量（切勿提交真实密钥）=====
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+id_ed25519
+id_rsa
+known_hosts
+
+# ===== 日志 =====
+*.log
+
+# ===== 历史归档（release 快照副本，体积大且重复）=====
+releases/
+
+# ===== 系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ===== 工具运行时状态（非源码）=====
+.workbuddy/
+frontend/.vite/

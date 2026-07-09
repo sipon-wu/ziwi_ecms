@@ -1,0 +1,16 @@
+<template><div class="page"><h2 class="title">能效对标</h2>
+<div class="toolbar"><select v-model="dg" @change="load" class="sel"><option v-for="g in groups" :key="g" :value="g">{{g}}</option></select><input type="date" v-model="dt" @change="load" class="dt" /></div>
+<div v-if="data" class="section"><div class="kpi-row"><div class="kpi-card"><div class="kl">设备组</div><div class="kv" style="font-size:16px">{{data.device_group}}</div></div><div class="kpi-card"><div class="kl">额定功率</div><div class="kv">{{data.rated_kw}} kW</div></div><div class="kpi-card"><div class="kl">实际平均功率</div><div class="kv">{{data.actual_avg_kw}} kW</div></div><div class="kpi-card"><div class="kl">负载率</div><div class="kv">{{data.load_rate_pct}}%</div></div><div class="kpi-card" :style="{borderColor:data.is_pass?'#00a870':'#f57c00'}"><div class="kl">对标等级 (GB 19153)</div><div class="kv" :style="{color:data.is_pass?'#00a870':'#f57c00'}">{{data.benchmark_level}}</div></div></div><div ref="gauge" style="height:300px;margin-top:16px"></div></div><div v-else class="loading">加载中...</div></div></template>
+<script setup>import { ref,onMounted,nextTick } from 'vue'; import * as e from 'echarts'; import { useEnergyStore } from '../store/energy'
+
+function pad(n) { return String(n).padStart(2,'0') }
+function todayStr() { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()) }
+function pastDays(n) { const d=new Date(); d.setDate(d.getDate()-n); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()) }
+function thisMonthStr() { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1) }
+
+const store=useEnergyStore(), groups=ref([]), dg=ref(''), dt=ref(todayStr()), data=ref(null), gauge=ref(null)
+async function load(){ data.value=await store.fetchJSONRaw(`/api/analysis/benchmark?device_group=${dg.value}&date=${dt.value}`); if(data.value) nextTick(()=>{ const ch=e.init(gauge.value); ch.setOption({series:[{type:'gauge',min:0,max:100,progress:{show:true,width:14,itemStyle:{color:data.value.load_rate_pct>=75?'#00a870':data.value.load_rate_pct>=60?'#f57c00':'#d32f2f'}},axisLine:{lineStyle:{width:14}},detail:{valueAnimation:true,formatter:'{value}%'},data:[{value:data.value.load_rate_pct,name:'负载率'}],markPoint:{data:[{name:'一级≤75',coord:[75,'100%'],itemStyle:{color:'#00a870'}},{name:'二级≤60',coord:[60,'100%'],itemStyle:{color:'#f57c00'}}]}}]}) }) }
+async function init(){ const w=await store.fetchJSONRaw('/api/device/workcenters'); if(w?.flat){ groups.value=w.flat.filter(n=>n.code?.startsWith('WC-')).map(n=>n.name); if(groups.value.length){ dg.value=groups.value[0]; load() } } }
+onMounted(init)
+</script>
+<style scoped>.page{display:flex;flex-direction:column;gap:16px}.title{font-size:18px;color:#333}.toolbar{display:flex;gap:10px;background:#fff;padding:12px 16px;border-radius:10px;border:1px solid #e8eaed}.sel,.dt{padding:6px 10px;border:1px solid #ddd;border-radius:6px}.section{background:#fff;border:1px solid #e8eaed;border-radius:10px;padding:20px}.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}.kpi-card{background:#fff;border:1px solid #e8eaed;border-radius:10px;padding:16px;text-align:center}.kl{font-size:12px;color:#999}.kv{font-size:24px;font-weight:700;color:#333;margin-top:6px}.loading{text-align:center;padding:60px;color:#aaa}</style>

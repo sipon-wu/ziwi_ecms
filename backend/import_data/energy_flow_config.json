@@ -1,0 +1,42 @@
+[
+  {
+    "from_node": "购入电力",
+    "to_node": "空压机组",
+    "ratio_pct": "28%"
+  },
+  {
+    "from_node": "购入电力",
+    "to_node": "机加工设备",
+    "ratio_pct": "55%"
+  },
+  {
+    "from_node": "购入电力",
+    "to_node": "测试台",
+    "ratio_pct": "8%"
+  },
+  {
+    "from_node": "购入电力",
+    "to_node": "辅助及照明",
+    "ratio_pct": "9%"
+  },
+  {
+    "from_node": "空压机组",
+    "to_node": "有效压缩空气",
+    "ratio_pct": "80%"
+  },
+  {
+    "from_node": "空压机组",
+    "to_node": "散热损失",
+    "ratio_pct": "20%"
+  },
+  {
+    "from_node": "机加工设备",
+    "to_node": "有效加工动能",
+    "ratio_pct": "70%"
+  },
+  {
+    "from_node": "机加工设备",
+    "to_node": "摩擦损失",
+    "ratio_pct": "30%"
+  }
+]

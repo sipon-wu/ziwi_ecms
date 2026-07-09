@@ -1,0 +1,11 @@
+<template><div class="page"><h2 class="title">能效平衡与优化</h2><div class="section"><h3>能耗分布</h3><div ref="pie" style="height:300px"></div></div><div class="section"><h3>AI优化建议</h3><div class="tips"><div class="tip" v-for="t in tips" :key="t.title"><b>{{t.title}}</b><p>{{t.desc}}</p><button class="btn btn-primary" @click="adopt(t)">采纳</button></div></div></div></div></template><script setup>import { ref,onMounted,nextTick } from 'vue';import * as e from 'echarts';import { useEnergyStore } from '../store/energy'
+
+function pad(n) { return String(n).padStart(2,'0') }
+function todayStr() { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()) }
+function pastDays(n) { const d=new Date(); d.setDate(d.getDate()-n); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()) }
+function thisMonthStr() { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1) }
+
+const store=useEnergyStore(),pie=ref(null),tips=ref([])
+onMounted(async()=>{ const d=await store.fetchJSONRaw(`/api/analysis/balance?date=${todayStr()}`)||{}; nextTick(()=>{ const ch=e.init(pie.value); ch.setOption({tooltip:{trigger:'item'},series:[{type:'pie',radius:['40%','65%'],data:(d.breakdown||[]).map(x=>({name:x.name,value:x.kwh})),label:{formatter:'{b}\n{d}%'}}]}) }); tips.value=d.tips||[] })
+function adopt(t){ if(t?.title) alert(`已采纳: ${t.title}\n预计节能量: ${t.desc||''}`) }
+</script><style scoped>.page{display:flex;flex-direction:column;gap:16px}.title{font-size:18px;color:#333}.section{background:#fff;border:1px solid #e8eaed;border-radius:10px;padding:20px}h3{font-size:14px;color:#555;margin-bottom:12px}.tips{display:flex;flex-direction:column;gap:12px}.tip{background:#f5f7fa;padding:16px;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:16px}.tip b{font-size:14px;color:#333}.tip p{font-size:12px;color:#777;flex:1}.btn{padding:6px 16px;border:none;border-radius:6px;cursor:pointer;font-size:12px}.btn-primary{background:#0d7377;color:#fff}</style>

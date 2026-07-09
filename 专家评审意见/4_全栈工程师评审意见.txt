@@ -1,0 +1,403 @@
+全栈工程师融合评审意见（基于流程图新需求）
+评审人角色：全栈工程师（聚焦需求可实现性、前后端交互、状态管理、与现有模型的对齐）
+评审对象：原始能源数据模型 + CLI设计 + 新流程图需求
+评审结论：需求可落地，但流程图存在关键逻辑歧义和技术缺口，需补充明确后方可进入开发
+
+一、流程图理解与解析
+我将您的流程图转换为标准泳道图逻辑，以便分析：
+
+yaml
+用户交互流程:
+  步骤1 - 查看数据源:
+    决策: 是否上传数据?
+      - 是 → 采用最新月度数据
+      - 否 → 采用上月度数据
+  
+  步骤2 - 设备分摊:
+    两条并行路径:
+      路径A（上传新数据）: 按设备进行分摊，依统计最小单元粒度
+      路径B（使用上月数据）: 按设备进行分摊，依统计最小单元粒度（单台较上月随机偏移1%以内）
+  
+  步骤3 - 时间段分拆:
+    两条并行路径:
+      路径A: 按统计需要分时、分日...
+      路径B: 按统计需要分时、分日（较上月随机偏移5%以内）
+  
+  步骤4 - 实时刷新:
+    操作: 实时刷新为当前时间数据
+    操作: 前端同步刷新界面
+  
+  结束
+核心逻辑理解
+流程节点	业务含义	技术动作
+查看数据源	用户决定数据来源	前端选择器 + 后端数据获取
+设备分摊	总量按设备粒度拆解	分摊算法（额定功率/历史实际）
+时间段分拆	月总量按时/日粒度拆解	时间序列分解算法
+随机偏移	模拟月度间的正常波动	随机数生成 + 范围约束
+实时刷新	前后端数据同步	WebSocket/轮询 + 响应式UI
+二、与现有数据模型的关键冲突
+2.1 粒度冲突（最严重问题）
+维度	原始模型	新需求	冲突说明
+时间粒度	月级总量	时/日级分解	原始模型只存储月度值，但要输出时/日级数据 → 需要时间序列分解算法
+设备粒度	厂级总量	单台设备级	原始模型没有设备维度 → 需要设备台账+分摊算法
+数据性质	实际采集值	模拟生成值（随机偏移）	混合了"实测"和"模拟"两种数据质量 → 需要数据质量标签
+结论：新需求实际上是一个数据增强/模拟系统，而非纯粹的采集系统。原始模型是"记录实际数据"，新需求是"基于有限数据生成更细粒度数据"。
+
+2.2 数据质量等级的重新定义
+根据新需求，数据质量需要划分为：
+
+python
+class DataQuality(Enum):
+    ACTUAL = "actual"           # 实际采集值
+    AGGREGATED = "aggregated"   # 汇总值（原始模型）
+    DECOMPOSED = "decomposed"   # 分解值（算法生成）
+    SIMULATED = "simulated"     # 模拟值（含随机偏移）
+建议：在daily_energy表中增加generation_method字段：
+
+sql
+generation_method ENUM('manual_input', 'scada_collected', 'decomposed_from_monthly', 'simulated_with_offset')
+三、关键技术决策点
+决策点A：设备分摊算法（承接之前评审的决策点4）
+您流程图中提到两个选项：
+
+路径A（新数据）：依统计最小单元粒度
+
+路径B（上月数据）：单台较上月随机偏移1%以内
+
+技术方案：
+
+python
+class DeviceAllocationStrategy(ABC):
+    """设备分摊策略抽象类"""
+    @abstractmethod
+    def allocate(self, total_energy: float, devices: List[Device]) -> Dict[int, float]:
+        pass
+
+class HistoricalActualStrategy(DeviceAllocationStrategy):
+    """历史实际比例策略（推荐用于路径A）"""
+    def allocate(self, total_energy, devices):
+        # 基于过去3个月的实际运行比例
+        ratios = [d.avg_ratio_last_3_months for d in devices]
+        return self._allocate_by_ratio(total_energy, ratios)
+
+class RatedPowerStrategy(DeviceAllocationStrategy):
+    """额定功率比例策略（降级方案）"""
+    def allocate(self, total_energy, devices):
+        ratios = [d.rated_power for d in devices]
+        return self._allocate_by_ratio(total_energy, ratios)
+
+class RandomOffsetStrategy(DeviceAllocationStrategy):
+    """随机偏移策略（用于路径B）"""
+    def __init__(self, offset_range: float = 0.01):  # 1%偏移
+        self.offset_range = offset_range
+    
+    def allocate(self, total_energy, devices):
+        # 获取上月的分摊比例
+        last_month_ratios = [d.last_month_ratio for d in devices]
+        # 添加随机偏移
+        current_ratios = [r * (1 + random.uniform(-self.offset_range, self.offset_range)) 
+                          for r in last_month_ratios]
+        # 归一化
+        current_ratios = [r/sum(current_ratios) for r in current_ratios]
+        return self._allocate_by_ratio(total_energy, current_ratios)
+决策点B：时间段分拆算法
+需求提到"分时、分日"，需要明确：
+
+问题1：分拆的目标粒度是什么？
+
+工作日/周末模式？
+
+小时级负荷曲线？
+
+每日平均值？
+
+问题2：分拆的依据是什么？
+
+建议采用典型负荷曲线库方案：
+
+python
+class TemporalDecompositionStrategy:
+    def __init__(self, load_profile_library: LoadProfileLibrary):
+        self.profiles = load_profile_library
+    
+    def decompose(self, monthly_total: float, energy_type: str, season: str) -> List[DailyData]:
+        # 1. 获取该能源类型的典型日负荷曲线
+        typical_curve = self.profiles.get(energy_type, season)
+        
+        # 2. 将月度总量按典型曲线分配到每日
+        daily_ratios = typical_curve.daily_ratios
+        daily_values = [monthly_total * r for r in daily_ratios]
+        
+        # 3. 如果是路径B（随机偏移），添加±5%波动
+        if self.with_random_offset:
+            daily_values = self._add_random_offset(daily_values, 0.05)
+        
+        return daily_values
+
+class LoadProfileLibrary:
+    """典型负荷曲线库"""
+    def __init__(self):
+        # 从历史数据中学习，或使用行业标准曲线
+        self.profiles = {
+            ("electricity", "summer"): [0.03, 0.03, 0.02, ..., 0.04],  # 31天
+            ("electricity", "winter"): [0.04, 0.03, 0.03, ..., 0.03],
+            ("natural_gas", "summer"): [...],
+        }
+决策点C：随机偏移的一致性
+需求中出现了两个随机偏移：
+
+设备分摊层：单台较上月随机偏移1%以内
+
+时间段分拆层：较上月随机偏移5%以内
+
+重要问题：这两个偏移是否独立？还是需要保证设备级偏移+时间级偏移后的总量回写？
+
+建议方案：
+
+python
+# 确保总量守恒
+def ensure_total_conservation(allocated_values: List[float], original_total: float) -> List[float]:
+    """确保分摊后的总和等于原始总量"""
+    current_total = sum(allocated_values)
+    if abs(current_total - original_total) > 1e-6:
+        # 按比例调整
+        scale_factor = original_total / current_total
+        return [v * scale_factor for v in allocated_values]
+    return allocated_values
+四、前后端交互设计
+4.1 状态机设计
+根据流程图，前端需要维护复杂的状态：
+
+python
+class SimulationState(Enum):
+    IDLE = "idle"                     # 初始状态
+    DATA_SOURCE_SELECTED = "data_source_selected"  # 已选择数据源
+    DEVICE_ALLOCATED = "device_allocated"          # 已完成设备分摊
+    TEMPORAL_DECOMPOSED = "temporal_decomposed"    # 已完成时段分拆
+    REFRESHED = "refreshed"           # 已刷新
+4.2 API设计
+yaml
+# 核心API
+POST /api/v1/simulation/start
+  Request:
+    data_source: "upload" | "last_month"
+    month: "2026-05"
+    file: (optional, 如果data_source=upload)
+  
+  Response:
+    task_id: "sim_20260609_001"
+    status_url: "/api/v1/simulation/status/sim_20260609_001"
+
+GET /api/v1/simulation/status/{task_id}
+  Response:
+    status: "processing" | "device_allocating" | "temporal_decomposing" | "completed"
+    current_step: "device_allocation"
+    progress: 45  # 百分比
+
+GET /api/v1/simulation/result/{task_id}
+  Response:
+    device_level: [...]
+    hourly_level: [...]
+    daily_level: [...]
+
+# WebSocket实时推送
+WS /ws/simulation/{task_id}
+  Message:
+    event: "step_completed"
+    step: "device_allocation"
+    data: {...}
+4.3 前端状态管理（React示例）
+typescript
+// 状态定义
+interface SimulationState {
+  step: 'dataSource' | 'deviceAllocation' | 'temporalDecomposition' | 'refresh';
+  dataSource: 'upload' | 'lastMonth' | null;
+  uploadedFile?: File;
+  deviceAllocationResults?: DeviceResult[];
+  temporalResults?: TemporalResult[];
+  isRefreshing: boolean;
+}
+
+// 关键组件
+const SimulationFlow: React.FC = () => {
+  const [state, dispatch] = useReducer(simulationReducer, initialState);
+  
+  // 监听WebSocket实时更新
+  useEffect(() => {
+    if (state.taskId) {
+      const ws = new WebSocket(`/ws/simulation/${state.taskId}`);
+      ws.onmessage = (event) => {
+        const { step, data } = JSON.parse(event.data);
+        dispatch({ type: `STEP_${step.toUpperCase()}_COMPLETED`, payload: data });
+      };
+      return () => ws.close();
+    }
+  }, [state.taskId]);
+  
+  return (
+    <Stepper activeStep={getStepIndex(state.step)}>
+      <DataSourceStep onComplete={handleDataSourceComplete} />
+      <DeviceAllocationStep results={state.deviceAllocationResults} />
+      <TemporalDecompositionStep results={state.temporalResults} />
+      <RefreshStep onRefresh={handleRefresh} />
+    </Stepper>
+  );
+};
+五、与评审意见的融合汇总
+5.1 能源专家意见 vs 新需求
+能源专家建议	与新需求的冲突/补充	解决方案
+独立表存储（daily_energy）	新需求需要设备级+小时级存储	增加device_energy和hourly_energy表
+按品种独立偏移容差	新需求中时间段偏移±5%，设备偏移±1%	保持一致，偏移值按品种可配置
+设备分摊按历史实际比例	新需求路径B要求随机偏移	实现两种策略，用户可选
+5.2 碳分析师意见 vs 新需求
+碳分析师建议	与新需求的冲突/补充	解决方案
+排放边界标识（scope/source_type）	新需求生成的模拟数据无法标记真实边界	标记为simulated，在报告中明确说明
+数据质量等级体系	新需求引入了"模拟数据"类型	在质量等级中增加simulated级别
+实测vs缺省值区分	随机偏移生成的数据既非实测也非缺省	新增data_generation_method字段
+5.3 全栈工程师原意见 vs 新需求
+原全栈建议	新需求带来的新要求	解决方案
+配置文件驱动	需要支持Web前端交互配置	增加API层，配置文件作为后端默认配置
+三层架构	需要增加前端层 + WebSocket层	扩展为四层架构（前端+API+服务+数据）
+数据库设计	需要设备表、小时表、任务状态表	扩展ER图（见下节）
+六、扩展数据库设计
+根据新需求，需要补充以下表：
+
+sql
+-- 设备台账表
+CREATE TABLE devices (
+    id INT PRIMARY KEY,
+    device_name VARCHAR(100),
+    device_type VARCHAR(50),
+    rated_power DECIMAL(10,2),
+    rated_power_unit VARCHAR(20),
+    installation_date DATE,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- 设备级能源数据表
+CREATE TABLE device_energy (
+    id BIGINT PRIMARY KEY,
+    device_id INT,
+    energy_type VARCHAR(50),
+    value DECIMAL(20,4),
+    unit VARCHAR(20),
+    record_date DATE,
+    allocation_method VARCHAR(50),  -- historical/rated/random_offset
+    generation_method VARCHAR(50),  -- actual/decomposed/simulated
+    FOREIGN KEY (device_id) REFERENCES devices(id)
+);
+
+-- 小时级能源数据表
+CREATE TABLE hourly_energy (
+    id BIGINT PRIMARY KEY,
+    energy_type VARCHAR(50),
+    value DECIMAL(20,4),
+    unit VARCHAR(20),
+    hour TIMESTAMP,  -- 精确到小时
+    decomposition_method VARCHAR(50),  -- load_profile/random_offset
+    parent_daily_id BIGINT,  -- 关联到daily_energy表
+    INDEX idx_hour (hour)
+);
+
+-- 模拟任务状态表
+CREATE TABLE simulation_tasks (
+    task_id VARCHAR(50) PRIMARY KEY,
+    status VARCHAR(20),  -- pending/processing/completed/failed
+    current_step VARCHAR(50),
+    progress INT DEFAULT 0,
+    config_snapshot JSON,
+    created_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    error_message TEXT
+);
+七、实施路线图更新
+基于新需求，调整后的实施优先级：
+
+Sprint 1（2周）- 核心数据模型
+实现EnergyRecord数据模型
+
+实现daily_energy、devices、device_energy表
+
+实现基础CLI（配置文件驱动）
+
+Sprint 2（2周）- 分摊与分解算法
+实现设备分摊策略（历史实际/额定功率）
+
+实现随机偏移策略（±1%）
+
+实现时间段分拆算法（典型负荷曲线库）
+
+实现随机偏移（±5%）
+
+确保总量守恒
+
+Sprint 3（2周）- 前后端交互
+实现REST API（启动任务/查询状态/获取结果）
+
+实现WebSocket实时推送
+
+实现前端React组件（Stepper流程）
+
+实现数据可视化（设备级/小时级图表）
+
+Sprint 4（1周）- 完善与测试
+单元测试（覆盖率>80%）
+
+集成测试（端到端流程）
+
+性能测试（大数据量场景）
+
+部署文档
+
+八、最终结论
+8.1 需求可行性评估
+需求模块	可行性	风险点	风险等级
+数据源选择（上传/上月）	✅ 可行	无	低
+设备分摊（历史实际）	✅ 可行	需要设备台账数据	中
+设备分摊（随机偏移±1%）	✅ 可行	随机性导致结果不可复现	中
+时间段分拆（典型曲线）	⚠️ 部分可行	需要建立负荷曲线库，初始化成本高	高
+时间段分拆（随机偏移±5%）	✅ 可行	同设备层	中
+实时刷新WebSocket	✅ 可行	需要处理断线重连	中
+前端同步刷新	✅ 可行	状态管理复杂	低
+8.2 必须明确的待定事项
+在开发前，请明确以下问题：
+
+时间段分拆的典型负荷曲线从哪里来？
+
+选项A：从历史真实数据中学习（需要3个月以上历史数据）
+
+选项B：使用行业标准曲线（如工业用电典型日负荷曲线）
+
+选项C：使用简单平均分配（每天均匀分布）
+
+建议：初期使用C（简单平均），迭代到A（数据驱动）
+
+设备台账数据的来源？
+
+是否有现成的设备管理系统？
+
+如果没有，是否需要在本系统中管理？
+
+随机偏移是否需要"确定性随机"（即相同输入得到相同输出）？
+
+如果需要，使用固定随机种子（如random.seed(hash(month))）
+
+如果不需要，每次执行结果不同
+
+前端刷新的触发方式？
+
+自动轮询（每隔N秒）
+
+WebSocket推送
+
+用户手动点击刷新按钮
+
+8.3 最终评价
+当前状态：📋 需求分析阶段 - 逻辑清晰但存在技术缺口
+
+补充明确后的状态：✅ 可进入详细设计
+
+一句话总结：流程图需求与原始数据模型存在粒度冲突和数据性质冲突，需要增加设备级/小时级存储表、分摊/分解算法模块、以及数据质量标签体系。建议分4个Sprint实施，总工期约7周可交付生产级系统。最关键的前置工作是明确典型负荷曲线的来源和设备台账数据的可用性。
+
+评审人：全栈工程师
+评审日期：2026-06-09

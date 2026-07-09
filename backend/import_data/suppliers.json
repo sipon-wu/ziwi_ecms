@@ -1,0 +1,30 @@
+[
+  {
+    "supplier_name": "江苏YY精密铸造",
+    "supplier_code": "JSCAST002",
+    "contact_person": "李四",
+    "contact_email": "li@cast.com",
+    "region": "华东"
+  },
+  {
+    "supplier_name": "浙江ZZ电机科技",
+    "supplier_code": "ZJMOTOR003",
+    "contact_person": "王五",
+    "contact_email": "wang@motor.com",
+    "region": "华东"
+  },
+  {
+    "supplier_name": "安徽WW密封件",
+    "supplier_code": "AHSEAL004",
+    "contact_person": "赵六",
+    "contact_email": "zhao@seal.com",
+    "region": "华东"
+  },
+  {
+    "supplier_name": "山东BB轴承",
+    "supplier_code": "SDBEAR005",
+    "contact_person": "钱七",
+    "contact_email": "qian@bearing.com",
+    "region": "华北"
+  }
+]

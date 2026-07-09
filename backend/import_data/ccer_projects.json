@@ -1,0 +1,23 @@
+[
+  {
+    "name": "空压机余热回收",
+    "project_type": "节能增效",
+    "status": "开发中",
+    "estimated_reduction_ton": 420.0,
+    "progress": "40"
+  },
+  {
+    "name": "厂区绿化碳汇",
+    "project_type": "碳汇",
+    "status": "已核证",
+    "estimated_reduction_ton": 180.0,
+    "progress": "100"
+  },
+  {
+    "name": "制氮机节能改造",
+    "project_type": "节能增效",
+    "status": "已备案",
+    "estimated_reduction_ton": 310.0,
+    "progress": "60"
+  }
+]

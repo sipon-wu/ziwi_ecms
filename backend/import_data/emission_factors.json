@@ -1,0 +1,32 @@
+[
+  {
+    "factor_name": "天然气排放因子",
+    "factor_value": 2.16,
+    "source": "IPCC 2024",
+    "valid_from": "2026"
+  },
+  {
+    "factor_name": "蒸汽排放因子",
+    "factor_value": 276.0,
+    "source": "行业平均",
+    "valid_from": "2026"
+  },
+  {
+    "factor_name": "柴油排放因子",
+    "factor_value": 2.63,
+    "source": "IPCC 2024",
+    "valid_from": "2026"
+  },
+  {
+    "factor_name": "汽油排放因子",
+    "factor_value": 2.3,
+    "source": "IPCC 2024",
+    "valid_from": "2026"
+  },
+  {
+    "factor_name": "煤炭排放因子",
+    "factor_value": 2060.0,
+    "source": "IPCC 2024",
+    "valid_from": "2026"
+  }
+]
