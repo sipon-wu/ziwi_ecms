@@ -26,6 +26,9 @@ env/
 !.env.example
 *.key
 *.pem
+# 例外：license/ 下仅存放平台签发的公钥与示例 license（非私钥），允许入库供接入
+!license/public.pem
+!license/license.key
 id_ed25519
 id_rsa
 known_hosts
