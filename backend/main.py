@@ -35,6 +35,17 @@ async def log_requests(request: Request, call_next):
     return response
 
 
+# ========== License 启动校验（阶段 B：软告警，不阻断运行） ==========
+from license.verify import verify_license
+try:
+    _lic = verify_license()
+    if _lic["valid"]:
+        logger.info(f"License 校验通过: tenant={_lic['tenant_id']} exp={_lic['exp']}")
+    else:
+        logger.warning(f"License 未通过校验（软告警，不影响运行）: {_lic['error']}")
+except Exception as e:  # noqa: BLE001 阶段 A 开启硬拦截后再改为 re-raise
+    logger.error(f"License 硬校验失败: {e}")
+
 # ========== 注册路由 ==========
 from routers.dashboard import router as dashboard_router
 from routers.monitoring import router as monitoring_router
@@ -50,6 +61,7 @@ from routers.dict_router import router as dict_router
 from routers.supplier import router as supplier_router
 from routers.datasource import router as datasource_router
 from routers.device_mgmt import router as device_mgmt_router
+from routers.license_router import router as license_router
 
 app.include_router(dashboard_router)
 app.include_router(monitoring_router)
@@ -67,6 +79,7 @@ app.include_router(dict_router)
 app.include_router(supplier_router)
 app.include_router(datasource_router)
 app.include_router(device_mgmt_router)
+app.include_router(license_router)
 
 
 @app.get("/")

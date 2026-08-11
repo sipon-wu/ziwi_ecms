@@ -30,6 +30,9 @@ id_ed25519
 id_rsa
 known_hosts
 
+# 例外：license 模块的公共验签公钥需入库（非机密，全实例共用）
+!backend/license/public.pem
+
 # ===== 日志 =====
 *.log
 
