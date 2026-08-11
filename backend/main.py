@@ -82,6 +82,18 @@ app.include_router(device_mgmt_router)
 app.include_router(license_router)
 
 
+# ========== License 启动校验（阶段 B：软告警，不阻断、不误伤现有 demo） ==========
+try:
+    from license.verify import verify_license as _verify_license
+    _lic = _verify_license()
+    if not _lic["valid"]:
+        logger.warning("License 未通过校验（软告警，不影响运行）: %s", _lic["error"])
+    else:
+        logger.info("License 校验通过: tenant=%s exp=%s", _lic["tenant_id"], _lic["exp"])
+except Exception as _e:  # noqa: BLE001
+    logger.error("License 校验异常: %s", _e)
+
+
 @app.get("/")
 def root():
     return {"service": "知微能碳管理系统（AI版）API", "version": "2.0.0", "status": "running"}
