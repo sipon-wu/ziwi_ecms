@@ -24,7 +24,36 @@ logger = logging.getLogger("ecms.license")
 DEFAULT_LICENSE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def _candidate_dirs():
+    """按优先级返回可能的 license 目录：
+    1) 环境变量 LICENSE_DIR 显式指定
+    2) 当前模块所在目录（backend/license/，部署实例常见位置）
+    3) 仓库根 license/（git 仓库里 license.key 放在根目录）
+    4) 典型部署路径兜底
+    """
+    dirs = []
+    env = os.environ.get("LICENSE_DIR")
+    if env:
+        dirs.append(env)
+    dirs.append(DEFAULT_LICENSE_DIR)
+    dirs.append(os.path.normpath(os.path.join(DEFAULT_LICENSE_DIR, "..", "license")))
+    dirs.append("/var/www/dna/ecms-backend/license")
+    # 去重保序
+    seen, out = set(), []
+    for d in dirs:
+        if d and d not in seen:
+            seen.add(d)
+            out.append(d)
+    return out
+
+
 def _resolve_paths():
+    for base in _candidate_dirs():
+        key = os.path.join(base, "license.key")
+        pub = os.path.join(base, "public.pem")
+        if os.path.exists(key) and os.path.exists(pub):
+            return key, pub
+    # 都不存在时返回默认目录（错误由调用方判为 LICENSE_NOT_FOUND）
     base = os.environ.get("LICENSE_DIR", DEFAULT_LICENSE_DIR)
     return os.path.join(base, "license.key"), os.path.join(base, "public.pem")
 
