@@ -16,17 +16,19 @@ def energy_intensity(start_date: str = Query(default=D7), end_date: str = Query(
     total_kwh = c.execute("SELECT SUM(total_energy_kwh) FROM energy_records WHERE timestamp>=? AND timestamp<=?",
                           (f"{start_date} 00:00:00", f"{end_date} 23:55:00")).fetchone()[0] or 0
     total_units = c.execute("SELECT SUM(units_produced) FROM production_data WHERE date>=? AND date<=?",
-                            (start_date, end_date)).fetchone()[0] or 1
+                            (start_date, end_date)).fetchone()[0] or 0
     total_output = c.execute("SELECT SUM(daily_output_value) FROM production_data WHERE date>=? AND date<=?",
-                             (start_date, end_date)).fetchone()[0] or 1
+                             (start_date, end_date)).fetchone()[0] or 0
     today = datetime.now().strftime('%Y-%m-%d')
     today_units = c.execute("SELECT SUM(units_produced) FROM production_data WHERE date=?", (today,)).fetchone()[0] or 0
     conn.close()
+    per_product = round(total_kwh / total_units, 2) if total_units else 0
+    per_output = round(total_kwh / total_output, 2) if total_output else 0
     return ok({"total_kwh": round(total_kwh, 2),
                "total_energy_tce": round(total_kwh * COAL / 1000, 4),
-               "per_product_kwh": round(total_kwh / total_units, 2),
-               "energy_per_product": round(total_kwh / total_units, 2),
-               "energy_per_output_value": round(total_kwh / total_output, 2),
+               "per_product_kwh": per_product,
+               "energy_per_product": per_product,
+               "energy_per_output_value": per_output,
                "total_output": total_units,
                "total_units": total_units,
                "total_output_value_wan": round(total_output, 2),
@@ -117,3 +119,55 @@ def energy_flow(start_date: str = Query(default=D1), end_date: str = Query(defau
         {"source":"辅助及照明","target":"有效照明","value":aux_eff},{"source":"辅助及照明","target":"散热/摩擦损失","value":aux_loss+gas_loss},
     ]
     return ok({"period":f"{start_date} ~ {end_date}","total_kwh":total,"nodes":nodes,"links":links})
+
+
+@router.get("/api/analysis/monthly_production")
+def monthly_production(year: int = Query(default=2026)):
+    conn = get_db(); c = conn.cursor()
+    rows = c.execute("""SELECT CAST(strftime('%m', date) AS INTEGER) AS m,
+                               SUM(units_produced) AS u
+                        FROM production_data
+                        WHERE strftime('%Y', date) = ?
+                        GROUP BY m ORDER BY m""", (str(year),)).fetchall()
+    data = [0] * 12
+    for r in rows:
+        data[r['m'] - 1] = int(r['u'] or 0)
+    conn.close()
+    return ok({"year": year, "months": list(range(1, 13)), "units": data})
+
+
+@router.get("/api/analysis/monthly_energy")
+def monthly_energy(year: int = Query(default=2026)):
+    conn = get_db(); c = conn.cursor()
+    rows = c.execute("""SELECT CAST(strftime('%m', timestamp) AS INTEGER) AS m,
+                               SUM(total_energy_kwh) AS k
+                        FROM energy_records
+                        WHERE strftime('%Y', timestamp) = ?
+                        GROUP BY m ORDER BY m""", (str(year),)).fetchall()
+    data = [0.0] * 12
+    for r in rows:
+        data[r['m'] - 1] = round(r['k'] or 0, 2)
+    conn.close()
+    return ok({"year": year, "months": list(range(1, 13)), "kwh": data})
+
+
+@router.get("/api/analysis/monthly_device_energy")
+def monthly_device_energy(year: int = Query(default=2026), month: int = Query(default=1)):
+    conn = get_db(); c = conn.cursor()
+    m = str(month).zfill(2)
+    like = f"{year}-{m}-%"
+    rows = c.execute("""SELECT de.device_id,
+                               MAX(d.device_name) AS device_name,
+                               MAX(d.device_code) AS device_code,
+                               SUM(de.energy_kwh) AS k
+                        FROM device_energy de
+                        LEFT JOIN devices d ON d.id = de.device_id
+                        WHERE de.timestamp LIKE ?
+                        GROUP BY de.device_id
+                        ORDER BY k DESC""", (like,)).fetchall()
+    devices = [{"device_id": r['device_id'],
+                "device_name": r['device_name'],
+                "device_code": r['device_code'],
+                "energy_kwh": round(r['k'] or 0, 2)} for r in rows]
+    conn.close()
+    return ok({"year": year, "month": month, "devices": devices})

@@ -42,9 +42,11 @@ def monitoring_current(view: str = "groups"):
                      "power_factor": d['power_factor']} for d in rows]
 
     conn.close()
+    # 总功率 = 设备表格各行有功功率之和，保证「当前总功率」卡片与下方设备列表一致
+    total_kw = round(sum(d["active_power_kw"] for d in devices), 2) if devices else (rec['total_active_power_kw'] or 0)
     return ok({
         "timestamp": latest,
-        "total_active_power_kw": rec['total_active_power_kw'],
+        "total_active_power_kw": total_kw,
         "power_factor": rec['power_factor'],
         "view": view,
         "devices": devices

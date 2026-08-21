@@ -35,7 +35,7 @@
             <span class="collapse-btn" @click="sidebarCollapsed=!sidebarCollapsed">
               <svg viewBox="0 0 20 16" width="18" height="14"><path d="M0 1h20M0 8h20M0 15h20" fill="none" stroke="#666" stroke-width="2"/></svg>
             </span>
-            <span class="top-title">知微能碳管理系统</span>
+            <span class="top-title">德耐尔绿色工厂ECMS系统</span>
           </div>
           <div class="top-right">
             <span class="top-icon" title="搜索">

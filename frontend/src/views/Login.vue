@@ -3,7 +3,7 @@
   <div class="login-card">
     <div class="login-header">
       <img :src="logoUrl" class="login-logo" alt="logo" />
-      <h1>知微能碳管理系统</h1>
+      <h1>德耐尔绿色工厂ECMS系统</h1>
       <p class="sub">访客演示系统 / 管理员请切换账号</p>
     </div>
     <div class="login-form">
