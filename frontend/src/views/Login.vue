@@ -4,7 +4,6 @@
     <div class="login-header">
       <img :src="logoUrl" class="login-logo" alt="logo" />
       <h1>德耐尔绿色工厂ECMS系统</h1>
-      <p class="sub">访客演示系统 / 管理员请切换账号</p>
     </div>
     <div class="login-form">
       <div class="field">
@@ -29,8 +28,8 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const username = ref('guest')
-const password = ref('123')
+const username = ref('admin')
+const password = ref('admin123')
 const error = ref('')
 const loading = ref(false)
 const logoUrl = '/ziwilogo.png'
