@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import MainLayout from '../layouts/MainLayout.vue'
 import Login from '../views/Login.vue'
+import { hasPerm } from '../auth-permissions'
 
 const routes = [
   {
@@ -69,8 +70,12 @@ router.beforeEach(async (to, from, next) => {
         const cached = JSON.parse(localStorage.getItem('user') || '{}')
         cached.role = userRole
         localStorage.setItem('user', JSON.stringify(cached))
-        // 系统管理页面权限校验
-        if (to.path.startsWith('/system/') && !['super_admin', 'admin', 'guest'].includes(userRole)) {
+        // 系统管理页面：需 user_manage 权限
+        if (to.path.startsWith('/system/') && !hasPerm(userRole, 'user_manage')) {
+          next('/dashboard'); return
+        }
+        // 碳核查支撑(审核)页面：需 audit 权限
+        if (to.path.startsWith('/carbon/audit') && !hasPerm(userRole, 'audit')) {
           next('/dashboard'); return
         }
         next(); return

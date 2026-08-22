@@ -1,6 +1,7 @@
 """知微能碳 — 碳管理 API"""
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from db import get_db, ok
+from auth import require_perm
 from datetime import datetime, timedelta
 
 router = APIRouter(tags=["碳管理"])
@@ -112,7 +113,7 @@ def carbon_budget(month: str = Query(default=TM)):
 
 @router.get("/api/carbon/audit_support")
 @router.get("/api/carbon/audit")
-def carbon_audit_support(year: int = 2026):
+def carbon_audit_support(year: int = 2026, _: str = Depends(require_perm("audit"))):
     return ok({"year": year, "material_package_url": "/exports/carbon_audit_2026.zip",
                "download_url": "https://ziwi.cn/download/carbon_audit_2026.zip",
                "materials": "https://ziwi.cn/download/carbon_audit_2026.zip",

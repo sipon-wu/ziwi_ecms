@@ -81,6 +81,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { hasPerm } from '../auth-permissions'
 const logoUrl = import.meta.env.BASE_URL + 'ziwilogo.png'
 
 const route = useRoute()
@@ -254,10 +255,30 @@ const allMenuTree = [
   },
 ]
 
-// 系统管理菜单仅对 super_admin 和 admin 角色显示
+// 菜单按角色权限过滤：无对应权限的菜单项（含整组）对当前角色隐藏
+const PERM_FOR_PATH = {
+  '/carbon/audit': 'audit',
+  '/system/user': 'user_manage',
+  '/system/config': 'system_config',
+  '/system/dict': 'user_manage',
+  '/system/datasource': 'user_manage',
+  '/system/import': 'user_manage',
+  '/system/notify': 'user_manage',
+  '/system/logs': 'user_manage',
+  '/organization/permission': 'system_config',
+}
 const menuTree = computed(() => {
-  const excludeIds = ['super_admin', 'admin', 'guest'].includes(userRole.value) ? [] : ['system']
-  return allMenuTree.filter(m => !excludeIds.includes(m.id))
+  const role = userRole.value
+  return allMenuTree
+    .map(m => {
+      if (!m.children) return m
+      const children = m.children.filter(c => {
+        const p = PERM_FOR_PATH[c.path]
+        return !p || hasPerm(role, p)
+      })
+      return { ...m, children }
+    })
+    .filter(m => !m.children || m.children.length > 0)
 })
 
 // 手风琴展开

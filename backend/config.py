@@ -30,3 +30,13 @@ READONLY_ROLES = {"guest"}  # 只读角色集合
 RBAC_WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 # 写接口中允许匿名/访客调用的白名单（登录/登出/获取自身信息必须放行）
 RBAC_EXEMPT_PATHS = {"/api/auth/login", "/api/auth/logout", "/api/auth/me"}
+
+# 角色 → 权限集合（权限键与前端 auth-permissions.js 保持一致）
+PERMISSION_KEYS = ["view_data", "edit_config", "export_report", "user_manage", "audit", "system_config"]
+ROLE_PERMISSIONS = {
+    "super_admin": set(PERMISSION_KEYS),
+    "admin": set(PERMISSION_KEYS),
+    "operator": {"view_data", "export_report"},
+    "auditor": {"view_data", "audit", "export_report"},
+    "guest": {"view_data"},
+}

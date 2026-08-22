@@ -7,15 +7,19 @@ import os, json
 
 router = APIRouter(prefix="/api/auth", tags=["用户认证"])
 
-# 本地账号
-DEFAULT_USER = {
-    "username": "admin", "password_hash": hash_password(os.getenv("DEFAULT_ADMIN_PASS", "admin123")),
-    "role": "super_admin", "real_name": "系统管理员",
+# 本地账号（密码可用环境变量覆盖：DEFAULT_ADMIN_PASS / DEFAULT_AUDITOR_PASS /
+# DEFAULT_OPERATOR_PASS / DEFAULT_GUEST_PASS）
+USERS = {
+    "admin":    {"password_hash": hash_password(os.getenv("DEFAULT_ADMIN_PASS", "admin123")),
+                 "role": "super_admin", "real_name": "系统管理员"},
+    "auditor":  {"password_hash": hash_password(os.getenv("DEFAULT_AUDITOR_PASS", "auditor123")),
+                 "role": "auditor", "real_name": "审核员"},
+    "operator": {"password_hash": hash_password(os.getenv("DEFAULT_OPERATOR_PASS", "operator123")),
+                 "role": "operator", "real_name": "操作员"},
+    "guest":    {"password_hash": hash_password(os.getenv("DEFAULT_GUEST_PASS", "123")),
+                 "role": "guest", "real_name": "访客用户"},
 }
-GUEST_USER = {
-    "username": "guest", "password_hash": hash_password(os.getenv("DEFAULT_GUEST_PASS", "123")),
-    "role": "guest", "real_name": "访客用户",
-}
+UID_MAP = {"admin": 1, "auditor": 2, "operator": 3, "guest": 4}
 
 
 @router.post("/login")
@@ -25,15 +29,10 @@ async def login(body: dict):
     if not username or not password:
         return err("用户名和密码不能为空")
 
-    user = None
-    if username == "admin" and verify_password(password, DEFAULT_USER["password_hash"]):
-        user = DEFAULT_USER
-    elif username == "guest" and verify_password(password, GUEST_USER["password_hash"]):
-        user = GUEST_USER
-
-    if user:
+    user = USERS.get(username)
+    if user and verify_password(password, user["password_hash"]):
         token = create_token({
-            "user_id": 1 if user == DEFAULT_USER else 2,
+            "user_id": UID_MAP.get(username, 9),
             "username": username, "role": user["role"], "real_name": user["real_name"],
         })
         resp = JSONResponse(content=ok({
