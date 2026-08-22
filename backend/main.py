@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from db import ok
+from auth import decode_token
+from config import ENABLE_RBAC, READONLY_ROLES, RBAC_WRITE_METHODS, RBAC_EXEMPT_PATHS
 
 # ========== 创建应用 ==========
 app = FastAPI(title="知微能碳管理系统（AI版）API", version="2.0.0")
@@ -33,6 +35,29 @@ async def log_requests(request: Request, call_next):
     cost = round((time.time() - start) * 1000, 1)
     logger.info(f"{request.method} {request.url.path} → {response.status_code} [{cost}ms]")
     return response
+
+
+# ========== RBAC 只读角色拦截中间件 ==========
+# 仅对写方法生效；从 cookie 或 Authorization 头读取 JWT，判断角色是否在只读集合。
+# 无 token / token 非法 时直接放行（保持原有"未鉴权"行为，不误伤匿名读）。
+@app.middleware("http")
+async def rbac_readonly_guard(request: Request, call_next):
+    if ENABLE_RBAC and request.method in RBAC_WRITE_METHODS and request.url.path not in RBAC_EXEMPT_PATHS:
+        token = request.cookies.get("token") or ""
+        auth_header = request.headers.get("Authorization", "")
+        if not token and auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+        if token:
+            try:
+                payload = decode_token(token)
+                if payload.get("role") in READONLY_ROLES:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"code": 403, "message": "当前账号为只读权限，无写入操作权限"},
+                    )
+            except Exception:  # 非法/过期 token：放行，交由后续逻辑处理
+                pass
+    return await call_next(request)
 
 
 # ========== License 启动校验（阶段 B：软告警，不阻断运行） ==========
